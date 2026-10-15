@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>店铺分布地图 · demo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#0f141c;--panel:#151c26;--panel2:#1b2431;--line:#25313f;--txt:#e6edf5;--muted:#8fa3b8;--accent:#3b82f6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);
+     font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;padding:20px 22px 34px}
+h1{font-size:19px;margin:0 0 4px}
+.lede{color:var(--muted);font-size:13px;margin:0 0 14px}
+.ctrl{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin:0 0 11px}
+.ctrl .lbl{font-size:12px;color:var(--muted);margin:0 0 8px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;background:var(--panel2);border:1px solid var(--line);
+      color:#c3d3e6;border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer;user-select:none}
+.chip:hover{border-color:#3c5170}
+.chip.on{background:#243349;border-color:#3b82f6;color:#fff}
+#map{height:620px;border-radius:10px;border:1px solid var(--line);background:#0d141f}
+.legend{display:flex;align-items:center;gap:9px;margin-top:10px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.legend .grad{width:160px;height:10px;border-radius:5px;
+  background:linear-gradient(90deg,#6a7280, hsl(212,85%,72%), hsl(212,85%,32%))}
+.leaflet-tooltip{background:#0d141f;border:1px solid #2f4460;color:#e6edf5;border-radius:8px;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);padding:8px 10px}
+.leaflet-tooltip table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+.leaflet-tooltip th,.leaflet-tooltip td{text-align:left;padding:2px 6px;border-bottom:1px solid #1d2836;white-space:nowrap}
+.leaflet-tooltip th{color:#8fa3b8;font-weight:500;font-size:11px}
+.leaflet-tooltip .sub{color:#8fa3b8;font-size:12px}
+</style>
+</head>
+<body>
+<h1>店铺分布地图 · demo</h1>
+<p class="lede">高德底图，可拖拽/滚轮缩放；点色越深=近30天发了积分场次越多，灰点=未发；悬停看每场明细。</p>
+
+<div class="ctrl">
+  <p class="lbl">城市切换</p>
+  <div class="chips" id="cityChips"><span class="chip on" data-city="">全国</span><span class="chip" data-city="上海">上海</span><span class="chip" data-city="北京">北京</span><span class="chip" data-city="南京">南京</span><span class="chip" data-city="哈尔滨">哈尔滨</span><span class="chip" data-city="常州">常州</span><span class="chip" data-city="广州">广州</span><span class="chip" data-city="沈阳">沈阳</span><span class="chip" data-city="深圳">深圳</span><span class="chip" data-city="苏州">苏州</span><span class="chip" data-city="青岛">青岛</span></div>
+</div>
+<div class="ctrl">
+  <p class="lbl">TCG 筛选（多选，只看对应 TCG 近30天发过积分的店铺）</p>
+  <div class="chips" id="tcgChips"><span class="chip on" data-tcg="">全部</span><span class="chip" data-tcg="FAB">FAB</span><span class="chip" data-tcg="万智牌">万智牌</span><span class="chip" data-tcg="十二军团">十二军团</span><span class="chip" data-tcg="峡谷争锋">峡谷争锋</span><span class="chip" data-tcg="幻兽帕鲁">幻兽帕鲁</span><span class="chip" data-tcg="正面对决">正面对决</span><span class="chip" data-tcg="洛卡纳">洛卡纳</span><span class="chip" data-tcg="游戏王">游戏王</span><span class="chip" data-tcg="符文战场">符文战场</span><span class="chip" data-tcg="航海王">航海王</span><span class="chip" data-tcg="高达GCG">高达GCG</span></div>
+</div>
+
+<div id="map"></div>
+<div class="legend">
+  <span>近30天发了积分的积分赛场次</span>
+  <span style="width:10px;height:10px;border-radius:50%;background:#6a7280;display:inline-block"></span><span>0（未发）</span>
+  <span class="grad"></span><span>1</span><span style="opacity:.6">→</span><span>11</span>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const SHOPS = [{"name": "幻守卡牌", "city": "上海", "lng": 121.43290062122037, "lat": 31.23879093527187, "density": 11, "matches": [{"tcg": "航海王", "date": "2026-09-18", "name": "幻守卡牌xKA盟积分赛", "players": 27, "bound": 17}, {"tcg": "符文战场", "date": "2026-09-21", "name": "幻守卡牌xKA盟积分赛", "players": 23, "bound": 16}, {"tcg": "正面对决", "date": "2026-09-17", "name": "幻守卡牌xKA盟积分赛", "players": 16, "bound": 14}, {"tcg": "正面对决", "date": "2026-09-24", "name": "幻守卡牌xKA盟积分赛", "players": 9, "bound": 5}, {"tcg": "航海王", "date": "2026-09-25", "name": "幻守卡牌xKA盟积分赛", "players": 9, "bound": 6}, {"tcg": "符文战场", "date": "2026-09-28", "name": "幻守卡牌xKA盟积分赛", "players": 8, "bound": 7}, {"tcg": "正面对决", "date": "2026-09-28", "name": "幻守卡牌×KA盟积分赛", "players": 9, "bound": 7}, {"tcg": "航海王", "date": "2026-10-02", "name": "幻守卡牌×KA盟大积分赛", "players": 23, "bound": 13}, {"tcg": "符文战场", "date": "2026-10-05", "name": "幻守卡牌xKA盟积分赛", "players": 20, "bound": 20}, {"tcg": "航海王", "date": "2026-10-09", "name": "幻守卡牌xKA盟积分赛", "players": 13, "bound": 11}, {"tcg": "符文战场", "date": "2026-10-12", "name": "幻守卡牌xKA盟积分赛", "players": 13, "bound": 9}], "tcgs": ["正面对决", "符文战场", "航海王"]}, {"name": "M3", "city": "上海", "lng": 121.4718082209159, "lat": 31.26154286974971, "density": 10, "matches": [{"tcg": "洛卡纳", "date": "2026-09-15", "name": "KA盟积分赛", "players": 8, "bound": 6}, {"tcg": "洛卡纳", "date": "2026-09-22", "name": "KA盟积分赛", "players": 7, "bound": 4}, {"tcg": "洛卡纳", "date": "2026-09-29", "name": "KA盟积分赛", "players": 8, "bound": 8}, {"tcg": "万智牌", "date": "2026-09-17", "name": "霸王大陆KA盟积分赛", "players": 11, "bound": 11}, {"tcg": "万智牌", "date": "2026-09-24", "name": "霸王大陆KA盟积分赛", "players": 10, "bound": 9}, {"tcg": "符文战场", "date": "2026-09-27", "name": "符文竞技- KA盟积分赛", "players": 7, "bound": 7}, {"tcg": "洛卡纳", "date": "2026-10-04", "name": "KA盟大积分赛", "players": 12, "bound": 12}, {"tcg": "符文战场", "date": "2026-10-11", "name": "符文竞技- KA盟积分赛", "players": 8, "bound": 8}, {"tcg": "符文战场", "date": "2026-10-04", "name": "符文竞技- KA盟积分赛", "players": 16, "bound": 15}, {"tcg": "FAB", "date": "2026-10-05", "name": "FAB国庆特别KA盟大积分赛", "players": 15, "bound": 10}], "tcgs": ["FAB", "万智牌", "洛卡纳", "符文战场"]}, {"name": "集彦潮玩", "city": "上海", "lng": 121.47790614528463, "lat": 31.233693909702044, "density": 9, "matches": [{"tcg": "高达GCG", "date": "2026-09-16", "name": "集彦KA盟积分赛-9月第三场", "players": 32, "bound": 30}, {"tcg": "正面对决", "date": "2026-09-15", "name": "集彦潮玩-KA盟联赛积分赛", "players": 12, "bound": 9}, {"tcg": "高达GCG", "date": "2026-09-23", "name": "集彦KA盟积分赛-9月第四场", "players": 29, "bound": 24}, {"tcg": "正面对决", "date": "2026-09-22", "name": "集彦潮玩-KA盟联赛积分赛", "players": 15, "bound": 10}, {"tcg": "正面对决", "date": "2026-09-29", "name": "集彦潮玩-KA盟联赛积分赛", "players": 18, "bound": 14}, {"tcg": "高达GCG", "date": "2026-09-30", "name": "集彦KA盟积分赛-9月第五场", "players": 21, "bound": 18}, {"tcg": "高达GCG", "date": "2026-10-07", "name": "集彦KA盟积分赛-10月第一场", "players": 29, "bound": 25}, {"tcg": "正面对决", "date": "2026-10-06", "name": "集彦潮玩-KA盟积分赛10.6", "players": 10, "bound": 6}, {"tcg": "正面对决", "date": "2026-10-13", "name": "集彦潮玩-KA盟积分赛10.13", "players": 9, "bound": 8}], "tcgs": ["正面对决", "高达GCG"]}, {"name": "XKA", "city": "上海", "lng": 121.51233284542586, "lat": 31.29687076629588, "density": 8, "matches": [{"tcg": "航海王", "date": "2026-09-17", "name": "标准对战会+KA盟积分赛", "players": 8, "bound": 6}, {"tcg": "高达GCG", "date": "2026-09-21", "name": "店铺对战会+KA盟积分赛", "players": 14, "bound": 13}, {"tcg": "航海王", "date": "2026-09-24", "name": "标准对战会+KA盟积分赛", "players": 9, "bound": 8}, {"tcg": "高达GCG", "date": "2026-09-28", "name": "周一KA盟积分赛", "players": 11, "bound": 11}, {"tcg": "航海王", "date": "2026-10-01", "name": "标准对战会+KA盟积分赛", "players": 8, "bound": 7}, {"tcg": "高达GCG", "date": "2026-10-05", "name": "店铺对战会+KA盟积分赛", "players": 12, "bound": 10}, {"tcg": "航海王", "date": "2026-10-08", "name": "标准对战会+KA盟积分赛", "players": 12, "bound": 10}, {"tcg": "高达GCG", "date": "2026-10-12", "name": "周一KA盟积分赛", "players": 13, "bound": 10}], "tcgs": ["航海王", "高达GCG"]}, {"name": "优极客卡牌", "city": "上海", "lng": 121.4920831609478, "lat": 31.32163716102354, "density": 5, "matches": [{"tcg": "符文战场", "date": "2026-09-17", "name": "KA盟积分赛-4弹肥盒争夺战", "players": 18, "bound": 18}, {"tcg": "符文战场", "date": "2026-09-24", "name": "KA盟积分赛-4弹肥盒争夺战", "players": 14, "bound": 14}, {"tcg": "符文战场", "date": "2026-10-08", "name": "KA盟积分赛-4弹肥盒争夺战", "players": 14, "bound": 14}, {"tcg": "符文战场", "date": "2026-10-02", "name": "KA盟积分赛-4弹肥盒争夺战", "players": 16, "bound": 15}, {"tcg": "符文战场", "date": "2026-09-27", "name": "ka盟符文大积分赛", "players": 16, "bound": 14}], "tcgs": ["符文战场"]}, {"name": "空岛", "city": "上海", "lng": 121.53197585571213, "lat": 31.3227337728986, "density": 5, "matches": [{"tcg": "幻兽帕鲁", "date": "2026-09-15", "name": "捕捉露娜蒂-KA盟积分赛", "players": 12, "bound": 10}, {"tcg": "幻兽帕鲁", "date": "2026-09-22", "name": "露娜蒂寻踪-KA盟积分赛", "players": 6, "bound": 6}, {"tcg": "幻兽帕鲁", "date": "2026-09-29", "name": "露娜蒂寻踪-KA盟积分赛", "players": 12, "bound": 11}, {"tcg": "幻兽帕鲁", "date": "2026-10-06", "name": "露娜蒂寻踪-KA盟积分赛", "players": 7, "bound": 6}, {"tcg": "幻兽帕鲁", "date": "2026-10-13", "name": "KA盟积分赛", "players": 9, "bound": 9}], "tcgs": ["幻兽帕鲁"]}, {"name": "Gambit", "city": "深圳", "lng": 113.94289194524427, "lat": 22.576699066825906, "density": 4, "matches": [{"tcg": "符文战场", "date": "2026-09-16", "name": "Ka盟积分赛-入场一包肥", "players": 28, "bound": 23}, {"tcg": "符文战场", "date": "2026-09-23", "name": "Ka盟积分赛-入场一包肥", "players": 33, "bound": 28}, {"tcg": "符文战场", "date": "2026-09-30", "name": "Ka盟积分赛-入场一包肥", "players": 23, "bound": 20}, {"tcg": "符文战场", "date": "2026-10-07", "name": "Ka盟积分赛-入场一包肥", "players": 16, "bound": 14}], "tcgs": ["符文战场"]}, {"name": "Fairy Loong", "city": "上海", "lng": 121.41428036915653, "lat": 31.297731308315203, "density": 4, "matches": [{"tcg": "洛卡纳", "date": "2026-09-18", "name": "FL-ka盟积分赛", "players": 10, "bound": 7}, {"tcg": "洛卡纳", "date": "2026-10-02", "name": "FL-Ka盟积分赛", "players": 10, "bound": 7}, {"tcg": "洛卡纳", "date": "2026-10-07", "name": "FL-Ka盟积分赛", "players": 10, "bound": 7}, {"tcg": "洛卡纳", "date": "2026-10-10", "name": "FL-Ka盟积分赛", "players": 10, "bound": 7}], "tcgs": ["洛卡纳"]}, {"name": "玩具坑博物馆", "city": "常州", "lng": 119.96524191569623, "lat": 31.811602520312988, "density": 4, "matches": [{"tcg": "峡谷争锋", "date": "2026-09-19", "name": "玩具坑峡谷资格赛ka盟场", "players": 25, "bound": 12}, {"tcg": "峡谷争锋", "date": "2026-09-26", "name": "玩具坑豪华认证赛ka盟场", "players": 18, "bound": 10}, {"tcg": "峡谷争锋", "date": "2026-10-03", "name": "玩具坑峡谷资格赛ka盟场", "players": 24, "bound": 12}, {"tcg": "峡谷争锋", "date": "2026-10-10", "name": "玩具坑峡谷争锋认证赛ka盟场", "players": 14, "bound": 9}], "tcgs": ["峡谷争锋"]}, {"name": "钢铁国度", "city": "上海", "lng": 121.46912746540809, "lat": 31.263663302523547, "density": 4, "matches": [{"tcg": "高达GCG", "date": "2026-09-17", "name": "钢铁国度店铺对战会-KA盟积分赛", "players": 18, "bound": 13}, {"tcg": "高达GCG", "date": "2026-09-24", "name": "钢铁国度娱乐赛-KA盟积分赛", "players": 11, "bound": 10}, {"tcg": "高达GCG", "date": "2026-10-01", "name": "钢铁国度店铺对战会-KA盟积分赛", "players": 25, "bound": 21}, {"tcg": "高达GCG", "date": "2026-10-08", "name": "钢铁国度店铺对战会-KA盟积分赛", "players": 32, "bound": 23}], "tcgs": ["高达GCG"]}, {"name": "百可梦卡牌俱乐部", "city": "南京", "lng": 118.78403467765851, "lat": 32.066597059743096, "density": 4, "matches": [{"tcg": "洛卡纳", "date": "2026-09-16", "name": "百可梦-9月-KA盟积分赛", "players": 8, "bound": 8}, {"tcg": "洛卡纳", "date": "2026-09-23", "name": "百可梦-9月-KA盟积分赛", "players": 8, "bound": 8}, {"tcg": "洛卡纳", "date": "2026-09-30", "name": "百可梦-KA盟积分赛", "players": 8, "bound": 7}, {"tcg": "洛卡纳", "date": "2026-10-07", "name": "百可梦-KA盟积分赛", "players": 8, "bound": 8}], "tcgs": ["洛卡纳"]}, {"name": "月面基地", "city": "上海", "lng": 121.5264279290367, "lat": 31.2262032592502, "density": 4, "matches": [{"tcg": "洛卡纳", "date": "2026-09-18", "name": "月面基地Ka盟积分赛", "players": 11, "bound": 6}, {"tcg": "洛卡纳", "date": "2026-09-25", "name": "月面基地Ka盟积分赛", "players": 12, "bound": 8}, {"tcg": "洛卡纳", "date": "2026-10-02", "name": "月面基地Ka盟积分赛", "players": 10, "bound": 7}, {"tcg": "洛卡纳", "date": "2026-10-09", "name": "月面基地Ka盟积分赛", "players": 12, "bound": 9}], "tcgs": ["洛卡纳"]}, {"name": "GAMBIT（罗湖店）", "city": "深圳", "lng": 114.12500772750636, "lat": 22.54490617740743, "density": 4, "matches": [{"tcg": "符文战场", "date": "2026-09-21", "name": "Ka盟积分赛-入场一包肥（罗湖店）", "players": 12, "bound": 12}, {"tcg": "符文战场", "date": "2026-09-28", "name": "Ka盟积分赛-入场一包肥（罗湖店）", "players": 10, "bound": 10}, {"tcg": "符文战场", "date": "2026-10-05", "name": "Ka盟积分赛-入场一包肥（罗湖店）", "players": 8, "bound": 7}, {"tcg": "符文战场", "date": "2026-10-12", "name": "Ka盟积分赛-入场一包肥（罗湖店）", "players": 7, "bound": 5}], "tcgs": ["符文战场"]}, {"name": "AT卡牌", "city": "上海", "lng": 121.20594993909054, "lat": 31.04644029626393, "density": 3, "matches": [{"tcg": "符文战场", "date": "2026-09-22", "name": "ka盟积分赛", "players": 8, "bound": 5}, {"tcg": "符文战场", "date": "2026-09-29", "name": "ka盟积分赛", "players": 8, "bound": 5}, {"tcg": "符文战场", "date": "2026-10-06", "name": "ka盟积分赛", "players": 8, "bound": 7}], "tcgs": ["符文战场"]}, {"name": "泥头车", "city": "上海", "lng": 121.50752863040462, "lat": 31.309639743268864, "density": 3, "matches": [{"tcg": "高达GCG", "date": "2026-09-17", "name": "泥头车ka盟积分赛", "players": 17, "bound": 17}, {"tcg": "高达GCG", "date": "2026-09-24", "name": "泥头车ka盟积分赛", "players": 15, "bound": 15}, {"tcg": "高达GCG", "date": "2026-10-08", "name": "泥头车KA盟积分赛", "players": 16, "bound": 12}], "tcgs": ["高达GCG"]}, {"name": "真心朋友电竞卡牌俱乐部", "city": "广州", "lng": 113.37175250072319, "lat": 23.088535875548015, "density": 3, "matches": [{"tcg": "洛卡纳", "date": "2026-09-24", "name": "KA盟积分赛-核心", "players": 9, "bound": 8}, {"tcg": "洛卡纳", "date": "2026-09-30", "name": "KA盟积分赛-核心", "players": 14, "bound": 10}, {"tcg": "洛卡纳", "date": "2026-10-10", "name": "KA盟积分赛-核心", "players": 11, "bound": 8}], "tcgs": ["洛卡纳"]}, {"name": "时光卡藏", "city": "上海", "lng": 121.5126130872896, "lat": 31.301013452691848, "density": 3, "matches": [{"tcg": "幻兽帕鲁", "date": "2026-09-24", "name": "KA盟积分赛", "players": 8, "bound": 7}, {"tcg": "幻兽帕鲁", "date": "2026-10-01", "name": "KA盟积分赛", "players": 9, "bound": 8}, {"tcg": "幻兽帕鲁", "date": "2026-10-08", "name": "KA盟积分赛", "players": 7, "bound": 6}], "tcgs": ["幻兽帕鲁"]}, {"name": "上海赛弗桌游", "city": "上海", "lng": 121.53191884910231, "lat": 31.305046980956206, "density": 3, "matches": [{"tcg": "万智牌", "date": "2026-09-17", "name": "摩登ka盟积分赛", "players": 20, "bound": 19}, {"tcg": "万智牌", "date": "2026-09-23", "name": "摩登ka盟积分赛", "players": 14, "bound": 14}, {"tcg": "万智牌", "date": "2026-10-10", "name": "摩登ka盟积分赛", "players": 14, "bound": 14}], "tcgs": ["万智牌"]}, {"name": "青岛咔夫咖卡牌", "city": "青岛", "lng": 120.45387480516818, "lat": 36.10181676223321, "density": 3, "matches": [{"tcg": "符文战场", "date": "2026-09-27", "name": "咔夫咖x KA盟积分赛", "players": 16, "bound": 16}, {"tcg": "符文战场", "date": "2026-10-04", "name": "《一周年纪念套装》收集赛xKA积分赛", "players": 19, "bound": 19}, {"tcg": "符文战场", "date": "2026-10-07", "name": "《一周年纪念套装》收集赛xKA积分赛", "players": 13, "bound": 10}], "tcgs": ["符文战场"]}, {"name": "优极客卡牌（虹口店）", "city": "上海", "lng": 121.48338458803674, "lat": 31.24970067853915, "density": 3, "matches": [{"tcg": "正面对决", "date": "2026-09-16", "name": "KA盟积分赛-正面对决周中常规赛", "players": 8, "bound": 7}, {"tcg": "正面对决", "date": "2026-09-23", "name": "KA盟积分赛-正面对决周中常规赛", "players": 13, "bound": 13}, {"tcg": "正面对决", "date": "2026-09-30", "name": "KA盟积分赛-正面对决周中常规赛", "players": 8, "bound": 6}], "tcgs": ["正面对决"]}, {"name": "Jin伊卫", "city": "上海", "lng": 121.48961918430915, "lat": 31.328994575257642, "density": 2, "matches": [{"tcg": "洛卡纳", "date": "2026-10-03", "name": "Jin伊卫&KA盟积分赛", "players": 8, "bound": 8}, {"tcg": "洛卡纳", "date": "2026-09-16", "name": "Jin伊卫&KA盟积分赛", "players": 10, "bound": 9}], "tcgs": ["洛卡纳"]}, {"name": "深圳P9卡牌", "city": "深圳", "lng": 114.099374080708, "lat": 22.557151195096417, "density": 2, "matches": [{"tcg": "洛卡纳", "date": "2026-09-18", "name": "P9卡牌xKA盟积分赛", "players": 8, "bound": 7}, {"tcg": "洛卡纳", "date": "2026-10-09", "name": "P9卡牌xKA盟积分赛", "players": 10, "bound": 8}], "tcgs": ["洛卡纳"]}, {"name": "多魔熊", "city": "上海", "lng": 121.49986013418606, "lat": 31.265056140773137, "density": 2, "matches": [{"tcg": "十二军团", "date": "2026-10-03", "name": "KA盟积分赛-十二军团S2.0最后一舞", "players": 16, "bound": 3}, {"tcg": "正面对决", "date": "2026-09-30", "name": "多魔熊x KA盟积分赛", "players": 8, "bound": 4}], "tcgs": ["十二军团", "正面对决"]}, {"name": "上海玛雅源卡牌俱乐部", "city": "上海", "lng": 121.42157700834164, "lat": 31.187411771952302, "density": 2, "matches": [{"tcg": "正面对决", "date": "2026-09-19", "name": "玛雅源-KA盟积分赛", "players": 8, "bound": 7}, {"tcg": "正面对决", "date": "2026-09-26", "name": "玛雅源-KA盟积分赛", "players": 8, "bound": 8}], "tcgs": ["正面对决"]}, {"name": "酷猫卡牌", "city": "上海", "lng": 121.3525045188496, "lat": 31.153818608433156, "density": 2, "matches": [{"tcg": "正面对决", "date": "2026-09-15", "name": "酷猫卡牌-KA盟积分赛", "players": 9, "bound": 4}, {"tcg": "正面对决", "date": "2026-09-22", "name": ">>酷猫-KA盟积分赛<", "players": 8, "bound": 5}], "tcgs": ["正面对决"]}, {"name": "伏尔甘卡社", "city": "上海", "lng": 121.47455016175694, "lat": 31.22933872874768, "density": 2, "matches": [{"tcg": "高达GCG", "date": "2026-10-02", "name": "伏尔甘KA盟积分赛", "players": 15, "bound": 13}, {"tcg": "高达GCG", "date": "2026-10-11", "name": "伏尔甘KA盟积分赛", "players": 8, "bound": 5}], "tcgs": ["高达GCG"]}, {"name": "银河卡站", "city": "上海", "lng": 121.39801060075246, "lat": 31.21245011809075, "density": 1, "matches": [{"tcg": "高达GCG", "date": "2026-09-23", "name": "银河卡站-店铺对战会&KA盟积分赛", "players": 17, "bound": 11}], "tcgs": ["高达GCG"]}, {"name": "布斑卡牌", "city": "上海", "lng": 121.40071769613, "lat": 31.262750608073148, "density": 1, "matches": [{"tcg": "万智牌", "date": "2026-09-18", "name": "布斑卡牌ka盟积分赛摩登夜赛", "players": 14, "bound": 8}], "tcgs": ["万智牌"]}, {"name": "BTM EDG卡牌俱乐部", "city": "上海", "lng": 121.55781935321033, "lat": 31.288537747448995, "density": 1, "matches": [{"tcg": "游戏王", "date": "2026-09-27", "name": "白鸽xKA盟特别积分赛", "players": 60, "bound": 56}], "tcgs": ["游戏王"]}, {"name": "Chancenova", "city": "上海", "lng": 120.62313733188533, "lat": 31.348941131607326, "density": 1, "matches": [{"tcg": "航海王", "date": "2026-10-07", "name": "Chancenova ➕Ka盟积分赛", "players": 20, "bound": 13}], "tcgs": ["航海王"]}, {"name": "魄罗喵", "city": "深圳", "lng": 113.88750150493156, "lat": 22.585657950272758, "density": 1, "matches": [{"tcg": "符文战场", "date": "2026-10-04", "name": "10.4KA盟积分赛", "players": 8, "bound": 8}], "tcgs": ["符文战场"]}, {"name": "Wonder Four", "city": "上海", "lng": 121.52705609967623, "lat": 31.228720159813196, "density": 0, "matches": [], "tcgs": []}, {"name": "JE", "city": "上海", "lng": 120.68924264644045, "lat": 30.528671384401253, "density": 0, "matches": [], "tcgs": []}, {"name": "无限大卡牌-奉贤万景峰店", "city": "上海", "lng": 121.4986921258847, "lat": 30.934328919194872, "density": 0, "matches": [], "tcgs": []}, {"name": "无限大卡牌-宝山百联店", "city": "上海", "lng": 121.48818521673722, "lat": 31.38137018018556, "density": 0, "matches": [], "tcgs": []}, {"name": "OMEGA你好商店", "city": "苏州", "lng": 117.88517467056755, "lat": 31.589406753887136, "density": 0, "matches": [], "tcgs": []}, {"name": "哈尔滨冰果桌游吧", "city": "哈尔滨", "lng": 126.59814032736422, "lat": 45.716595461519724, "density": 0, "matches": [], "tcgs": []}, {"name": "怪兽营地", "city": "北京", "lng": 116.39229243324276, "lat": 39.858504232623574, "density": 0, "matches": [], "tcgs": []}, {"name": "DICE42桌游屋", "city": "北京", "lng": 116.49708546591376, "lat": 39.90999812197128, "density": 0, "matches": [], "tcgs": []}, {"name": "赤饱潮玩卡牌", "city": "上海", "lng": 121.3952559623159, "lat": 31.09451303456945, "density": 0, "matches": [], "tcgs": []}, {"name": "广州欢度时光桌游吧", "city": "广州", "lng": 113.34933499793875, "lat": 23.00712229559914, "density": 0, "matches": [], "tcgs": []}, {"name": "星系桌游", "city": "沈阳", "lng": 123.45706797201684, "lat": 41.80333562883179, "density": 0, "matches": [], "tcgs": []}];
+const MAXD = 11;
+const map = L.map('map', {zoomControl:true, attributionControl:false});
+L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+  {subdomains:['1','2','3','4'], maxZoom:18, minZoom:3}).addTo(map);
+
+let city = "";
+let selTcg = new Set();
+const layer = L.layerGroup().addTo(map);
+
+function color(d){
+  if(d<=0) return "#6a7280";
+  const L = 72 - (d/MAXD)*40;
+  return `hsl(212,85%,${L}%)`;
+}
+function tooltipHtml(s){
+  const ms = s.matches.slice().sort((a,b)=> a.tcg.localeCompare(b.tcg) || b.date.localeCompare(a.date));
+  if(!ms.length) return `<b>${s.name}</b><div class="sub">${s.city} · 近30天未发积分</div>`;
+  const rows = `<tr><th>TCG</th><th>日期</th><th>比赛</th><th>参与</th><th>绑定</th></tr>` +
+    ms.map(m=>`<tr><td>${m.tcg}</td><td>${m.date}</td><td>${m.name}</td><td>${m.players}</td><td>${m.bound}</td></tr>`).join("");
+  return `<b>${s.name}</b><div class="sub">${s.city} · 近30天发了积分 ${s.density} 场</div><table>${rows}</table>`;
+}
+function render(){
+  layer.clearLayers();
+  const list = SHOPS.filter(s => !city || s.city===city)
+                    .filter(s => selTcg.size===0 || s.tcgs.some(t=>selTcg.has(t)));
+  const pts = [];
+  list.forEach(s=>{
+    pts.push([s.lat, s.lng]);
+    const c = L.circleMarker([s.lat, s.lng], {
+      radius: s.density>0 ? 6+Math.min(5, s.density*0.5) : 5,
+      color:'#000', weight:0.6, opacity:0.55, fillColor: color(s.density), fillOpacity:1
+    });
+    c.bindTooltip(tooltipHtml(s), {direction:'top', opacity:1});
+    layer.addLayer(c);
+  });
+  if(pts.length){
+    const b = L.latLngBounds(pts);
+    if(city){ map.fitBounds(b, {padding:[36,36], maxZoom:13}); }
+    else { map.fitBounds(b, {padding:[40,40]}); }
+  }
+}
+document.getElementById("cityChips").addEventListener("click", e=>{
+  const el = e.target.closest(".chip"); if(!el) return;
+  document.querySelectorAll("#cityChips .chip").forEach(c=>c.classList.remove("on"));
+  el.classList.add("on"); city = el.dataset.city; render();
+});
+document.getElementById("tcgChips").addEventListener("click", e=>{
+  const el = e.target.closest(".chip"); if(!el) return;
+  const t = el.dataset.tcg;
+  if(t===""){ selTcg.clear(); document.querySelectorAll("#tcgChips .chip").forEach(c=>c.classList.remove("on"));
+    el.classList.add("on"); }
+  else {
+    document.querySelector("#tcgChips .chip[data-tcg='']").classList.remove("on");
+    if(selTcg.has(t)){ selTcg.delete(t); el.classList.remove("on"); }
+    else { selTcg.add(t); el.classList.add("on"); }
+  }
+  render();
+});
+render();
+</script>
+</body>
+</html>
